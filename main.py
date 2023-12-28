@@ -10,7 +10,7 @@ import re
 app = FastAPI()
 
 inprogress_orders = {}
-
+n = 0 
 @app.post("/")
 async def handle_request(request: Request):
     # Retrieve the JSON data from the request
@@ -18,13 +18,19 @@ async def handle_request(request: Request):
 
     # Extract the necessary information from the payload
     # based on the structure of the WebhookRequest from Dialogflow
+  
     intent = payload['queryResult']['intent']['displayName']
     parameters = payload['queryResult']['parameters']
     output_context = payload['queryResult']['outputContexts']
-
+    print(intent)
     
     
     session_id = generic_helper.extract_session_id(output_context[0]['name'])
+
+    if intent == 'new.order':
+        if session_id in inprogress_orders:
+            del inprogress_orders[session_id] 
+        intent = 'order.add context:ongoing'
 
     intent_handler_dict = {
         'order.add context:ongoing': add_to_order,
@@ -32,7 +38,7 @@ async def handle_request(request: Request):
         'order.complete context:ongoing': complete_order,
         'track.order context:ongoing': track_order
     }
-
+    
     return intent_handler_dict[intent](parameters, session_id)
 
 
@@ -41,10 +47,10 @@ async def handle_request(request: Request):
 
 
 def add_to_order(parameters:dict, session_id:str):
-    
+    # print("yo")
     food_items = parameters['food_items']
     quantities = parameters['number']
-    print(inprogress_orders )
+    
     # session_id1 = generic_helper.extract_session_id(output_context[0]['name'])
     # if session_id1!=session_id:
     #     add_to_order(parameters, session_id1)
@@ -54,11 +60,14 @@ def add_to_order(parameters:dict, session_id:str):
     else:
 
         new_food_dict = dict(zip(food_items,quantities))
-        print(session_id)
+        
         if session_id in inprogress_orders:
+            # print(session_id)
+            # print(inprogress_orders)
             current_food_dict = inprogress_orders[session_id]
             current_food_dict.update(new_food_dict)
             inprogress_orders[session_id] = current_food_dict
+            
             
         else:
             inprogress_orders[session_id] = new_food_dict
@@ -170,6 +179,8 @@ def remove_from_order(parameters, session_id):
     else:
         order_str = generic_helper.get_str_from_food_dict(current_order)
         fulfillment_text += f" Here is what is left in your order: {order_str}"
+
+    
 
     return JSONResponse(content={
         "fulfillmentText": fulfillment_text
